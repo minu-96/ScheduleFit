@@ -1,0 +1,8 @@
+name = "team-schedule"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "team-schedule"
+database_id = "여기에-database_id-붙여넣기"

@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>스케줄 핏</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="app" id="app" hidden>
+  <header class="top">
+    <div class="brand">
+      <h1 id="room-title"></h1>
+      <p>되는 시간을 칠하면 자동으로 저장되고, 겹치는 시간이 바로 계산돼요.</p>
+      <div class="statusrow">
+        <span class="status" id="status"><i></i><span id="status-text">연결하는 중</span></span>
+        <button class="btn" id="copy-invite" type="button">초대 링크 복사</button>
+        <a class="txtbtn" href="/">새 방 만들기</a>
+      </div>
+    </div>
+    <div class="weeknav">
+      <button class="nav" id="wk-prev" type="button" aria-label="이전 주">‹</button>
+      <button class="wklabel" id="wk-label" type="button" aria-expanded="false" aria-controls="cal-pop">
+        <span id="wk-range"></span><span class="rel" id="wk-rel"></span>
+        <svg class="caret" viewBox="0 0 10 10" aria-hidden="true"><path d="M1 3l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+      </button>
+      <button class="nav" id="wk-next" type="button" aria-label="다음 주">›</button>
+      <button class="txtbtn" id="wk-today" type="button">이번 주</button>
+      <div class="calpop" id="cal-pop" hidden>
+        <div class="calhead">
+          <button class="nav" id="cal-prev" type="button" aria-label="이전 달">‹</button>
+          <span id="cal-title"></span>
+          <button class="nav" id="cal-next" type="button" aria-label="다음 달">›</button>
+        </div>
+        <div class="caldow"><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span><span>일</span></div>
+        <div class="calgrid" id="cal-grid"></div>
+        <div class="calnote"><span><i style="background:var(--me)"></i>내가 칠한 날</span><span><i style="background:var(--accent)"></i>다른 사람 입력 있는 날</span></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel board" aria-label="주간 시간표">
+      <div class="board-head">
+        <div class="seg" role="tablist" aria-label="보기 전환">
+          <button id="mode-paint" type="button" role="tab" aria-selected="true">내 시간 칠하기</button>
+          <button id="mode-team" type="button" role="tab" aria-selected="false">겹침 보기 <span class="badge" id="team-count"></span></button>
+        </div>
+        <div class="tools" id="paint-tools">
+          <button class="btn" id="act-weekday" type="button">평일 9–18시</button>
+          <button class="btn" id="act-copyprev" type="button">지난 주 복사</button>
+          <button class="btn" id="act-clear" type="button">이 주 비우기</button>
+          <button class="btn" id="act-undo" type="button" disabled>되돌리기<span class="kbd">⌘Z</span></button>
+        </div>
+      </div>
+      <div class="grid paint" id="grid" role="grid" aria-label="요일별 1시간 단위 칸"></div>
+      <div class="gridfoot">
+        <button class="txtbtn" id="toggle-night" type="button"></button>
+        <div class="legend" id="legend"></div>
+      </div>
+      <div class="detail" id="detail" aria-live="polite"></div>
+    </section>
+
+    <aside class="side">
+      <section class="panel card" id="card-join" aria-labelledby="h-join" hidden>
+        <div class="cardhead"><h2 id="h-join"><span class="step">01</span>이 방에 참여하기</h2></div>
+        <div class="field">
+          <label class="lbl" for="join-name">이름</label>
+          <input type="text" id="join-name" maxlength="20" placeholder="팀원이 알아볼 수 있는 이름" autocomplete="off">
+        </div>
+        <div class="field">
+          <label class="lbl" for="join-pin">비밀번호 (선택)</label>
+          <input type="text" id="join-pin" maxlength="12" placeholder="4자 이상" autocomplete="off">
+          <p class="help">적어 두면 다른 기기에서 같은 이름으로 다시 들어올 수 있고, 남이 내 이름으로 들어오지 못해요.</p>
+        </div>
+        <button class="btn primary" id="join-btn" type="button">들어가기</button>
+      </section>
+
+      <section class="panel card" id="card-me" aria-labelledby="h-me" hidden>
+        <div class="cardhead"><h2 id="h-me"><span class="step">01</span><span id="me-name"></span></h2><span class="muted" id="me-meta"></span></div>
+        <p class="help">칠한 내용은 자동으로 저장돼요. 이 기기에서 이름으로 다시 들어온 상태예요.</p>
+        <button class="btn" id="import-last" type="button" hidden>다른 방에서 칠한 시간 가져오기</button>
+        <details class="sub">
+          <summary>이전 코드 불러오기 · 나가기</summary>
+          <div>
+            <div class="row">
+              <input type="text" id="load-code" placeholder="이전에 쓰던 내 코드 붙여넣기" autocomplete="off" style="font-family:var(--f-mono);font-size:12.5px">
+              <button class="btn" id="load-btn" type="button">불러오기</button>
+            </div>
+            <button class="btn" id="leave-btn" type="button">이 기기에서 나가기</button>
+          </div>
+        </details>
+      </section>
+
+      <section class="panel card" id="card-admin" aria-labelledby="h-admin" hidden>
+        <div class="cardhead"><h2 id="h-admin"><span class="step">방장</span>방 관리</h2></div>
+        <div class="field">
+          <label class="lbl" for="admin-name">방 이름</label>
+          <input type="text" id="admin-name" maxlength="30" autocomplete="off">
+        </div>
+        <div class="field">
+          <span class="lbl">결과 공개 범위</span>
+          <div class="chips" role="radiogroup" aria-label="결과 공개 범위" id="admin-show">
+            <button type="button" role="radio" data-v="all">참여자 모두</button>
+            <button type="button" role="radio" data-v="admin">방장만</button>
+          </div>
+        </div>
+        <div class="hrow">
+          <button class="btn" id="copy-admin" type="button">방장 링크 복사</button>
+          <button class="btn danger" id="del-room" type="button">방 삭제</button>
+        </div>
+        <p class="help">방장 링크로 들어오면 다른 기기에서도 방장이 돼요. 이 링크는 다른 사람에게 보내지 마세요.</p>
+      </section>
+
+      <section class="panel card" aria-labelledby="h-team">
+        <div class="cardhead"><h2 id="h-team"><span class="step">02</span>참여자</h2><span class="muted" id="team-meta"></span></div>
+        <ul class="members" id="member-list"></ul>
+      </section>
+
+      <section class="panel card" aria-labelledby="h-best">
+        <div class="cardhead"><h2 id="h-best"><span class="step">03</span>추천 시간</h2><button class="txtbtn" id="copy-best" type="button">공지용 복사</button></div>
+        <div class="filters">
+          <div class="stepper">최소 인원
+            <button id="th-minus" type="button" aria-label="최소 인원 줄이기">−</button>
+            <output id="th-val"></output>
+            <button id="th-plus" type="button" aria-label="최소 인원 늘리기">+</button>
+          </div>
+          <div class="chips" role="radiogroup" aria-label="최소 길이" id="len-chips">
+            <button type="button" role="radio" data-len="1">1시간+</button>
+            <button type="button" role="radio" data-len="2">2시간+</button>
+            <button type="button" role="radio" data-len="3">3시간+</button>
+          </div>
+        </div>
+        <ol class="best" id="best-list"></ol>
+      </section>
+    </aside>
+  </main>
+</div>
+
+<div class="gone" id="gone" hidden>
+  <h1 style="margin:0;font-size:22px">방을 찾을 수 없어요</h1>
+  <p class="muted">링크가 잘못됐거나 방장이 방을 삭제했어요.</p>
+  <a class="btn primary" href="/" style="text-decoration:none">새 방 만들기</a>
+</div>
+<div class="toast" id="toast" role="status"></div>
+<script src="/room.js"></script>
+</body>
+</html>

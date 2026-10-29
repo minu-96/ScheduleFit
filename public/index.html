@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>스케줄 핏</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="app">
+  <main class="hero">
+    <h1>스케줄 핏</h1>
+    <p>방을 만들고 링크를 보내세요. 팀원이 이름만 적고 되는 시간을 칠하면, 겹치는 시간이 바로 모여요. 로그인은 필요 없어요.</p>
+    <form class="panel createcard" id="create" autocomplete="off">
+      <div class="field">
+        <label class="lbl" for="room-name">방 이름</label>
+        <input type="text" id="room-name" maxlength="30" placeholder="예) 졸업작품 팀, 동아리 정기회의" required>
+      </div>
+      <div class="field">
+        <span class="lbl">결과는 누가 볼 수 있나요</span>
+        <div class="chips" role="radiogroup" aria-label="결과 공개 범위" id="show-chips">
+          <button type="button" role="radio" data-v="all" aria-checked="true">참여자 모두</button>
+          <button type="button" role="radio" data-v="admin" aria-checked="false">방장만</button>
+        </div>
+        <p class="help" id="show-help">참여자 모두가 서로의 시간과 겹치는 시간을 볼 수 있어요.</p>
+      </div>
+      <button class="btn primary big" id="create-btn" type="submit">방 만들기</button>
+    </form>
+    <section id="mine" hidden>
+      <h2 style="font-size:15px;margin:8px 0 8px">내 방</h2>
+      <ul class="roomlist" id="roomlist"></ul>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" role="status"></div>
+<script>
+const $=id=>document.getElementById(id);
+let show='all';
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('show'),2200);}
+$('show-chips').onclick=e=>{const b=e.target.closest('button');if(!b)return;show=b.dataset.v;
+  document.querySelectorAll('#show-chips button').forEach(x=>x.setAttribute('aria-checked',x===b));
+  $('show-help').textContent=show==='all'?'참여자 모두가 서로의 시간과 겹치는 시간을 볼 수 있어요.':'참여자는 자기 시간만 보이고, 방장만 모두의 시간과 겹치는 시간을 볼 수 있어요.';};
+$('create').onsubmit=async e=>{
+  e.preventDefault();const name=$('room-name').value.trim();if(!name)return;
+  $('create-btn').disabled=true;
+  try{
+    const r=await fetch('/api/rooms',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name,show})});
+    const d=await r.json();if(!r.ok)throw new Error(d.error||'실패');
+    localStorage.setItem('ts_admin:'+d.id,d.adminKey);
+    const list=JSON.parse(localStorage.getItem('ts_rooms')||'[]').filter(x=>x.id!==d.id);
+    list.unshift({id:d.id,name,admin:true,at:Date.now()});localStorage.setItem('ts_rooms',JSON.stringify(list.slice(0,50)));
+    location.href='/r/'+d.id;
+  }catch(err){toast(err.message||'방을 만들지 못했어요');$('create-btn').disabled=false;}
+};
+try{
+  const list=JSON.parse(localStorage.getItem('ts_rooms')||'[]');
+  if(list.length){$('mine').hidden=false;const ul=$('roomlist');
+    list.forEach(x=>{const li=document.createElement('li');const a=document.createElement('a');a.href='/r/'+x.id;
+      const n=document.createElement('span');n.textContent=x.name;const s=document.createElement('small');s.textContent=x.admin?'방장':(x.me?x.me+' 님':'참여');
+      a.append(n,s);li.append(a);ul.append(li);});}
+}catch(e){}
+</script>
+</body>
+</html>
