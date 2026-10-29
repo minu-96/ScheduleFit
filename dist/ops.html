@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>운영자 · 스케줄 핏</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<form class="panel opslogin" id="login" autocomplete="off">
+  <h1>운영자 로그인</h1>
+  <p class="help">운영자만 들어올 수 있는 페이지예요. 만들어진 모든 방을 보고 관리할 수 있어요.</p>
+  <div class="field"><label class="lbl" for="l-id">아이디</label><input type="text" id="l-id" autocomplete="username" autocapitalize="off" spellcheck="false"></div>
+  <div class="field"><label class="lbl" for="l-pw">비밀번호</label><input type="password" id="l-pw" autocomplete="current-password"></div>
+  <button class="btn primary big" id="l-btn" type="button">로그인</button>
+  <p class="help" id="l-err" role="alert" style="color:var(--sun)" hidden></p>
+</form>
+
+<div class="opswrap" id="main" hidden>
+  <div class="opshead">
+    <h1>전체 방 관리</h1>
+    <div class="opsbar">
+      <span class="muted" id="count"></span>
+      <button class="btn" id="refresh" type="button">새로고침</button>
+      <button class="btn" id="logout" type="button">로그아웃</button>
+    </div>
+  </div>
+  <div class="opsbar"><input type="search" id="q" placeholder="방 이름이나 주소 일부로 검색" aria-label="방 검색"></div>
+  <div id="rooms" style="display:flex;flex-direction:column;gap:10px"></div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const pad=n=>String(n).padStart(2,'0');
+const KO=['월','화','수','목','금','토','일'];
+let CRED=null,ROOMS=[],open_=null,detail=null,tt;
+const store={get(){try{return JSON.parse(sessionStorage.getItem('ts_ops')||'null');}catch(e){return null;}},set(v){try{sessionStorage.setItem('ts_ops',JSON.stringify(v));}catch(e){}},clear(){try{sessionStorage.removeItem('ts_ops');}catch(e){}}};
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),2200);}
+function nav(u){if(window.__nav)window.__nav(u);else location.href=u;}
+async function api(method,path,body,cred){
+  const c=cred||CRED||{};
+  try{
+    const r=await fetch('/api/ops'+path,{method,headers:{'content-type':'application/json','x-ops-id':c.id||'','x-ops-pw':c.pw||''},body:body?JSON.stringify(body):undefined});
+    let data={};try{data=await r.json();}catch(e){}
+    return{ok:r.ok,status:r.status,data};
+  }catch(e){return{ok:false,status:0,data:{error:'네트워크에 연결할 수 없어요'}};}
+}
+const fdate=ts=>{if(!ts)return'–';const d=new Date(ts);return `${d.getFullYear()}.${pad(d.getMonth()+1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;};
+const fixWhen=f=>{const d=new Date(+f.date.slice(0,4),+f.date.slice(4,6)-1,+f.date.slice(6,8));return `${d.getMonth()+1}/${d.getDate()}(${KO[(d.getDay()+6)%7]}) ${pad(f.start)}:00–${pad(f.end)}:00`;};
+
+async function doLogin(){
+  const cred={id:$('l-id').value.trim(),pw:$('l-pw').value};
+  $('l-btn').disabled=true;$('l-err').hidden=true;
+  const r=await api('GET','/rooms',null,cred);
+  $('l-btn').disabled=false;
+  if(!r.ok){$('l-err').textContent=r.data.error||'로그인하지 못했어요';$('l-err').hidden=false;$('l-pw').value='';return;}
+  CRED=cred;store.set(cred);$('l-pw').value='';ROOMS=r.data.rooms;showMain();
+}
+$('l-btn').onclick=doLogin;
+$('login').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.tagName==='INPUT'){e.preventDefault();doLogin();}});
+$('login').addEventListener('submit',e=>e.preventDefault());
+$('logout').onclick=()=>{CRED=null;store.clear();ROOMS=[];open_=null;$('main').hidden=true;$('login').hidden=false;};
+$('refresh').onclick=()=>reload(true);
+$('q').oninput=()=>renderRooms();
+function showMain(){$('login').hidden=true;$('main').hidden=false;renderRooms();}
+async function reload(msg){
+  const r=await api('GET','/rooms');
+  if(!r.ok){if(r.status===401||r.status===429){$('logout').click();toast(r.data.error||'다시 로그인해 주세요');}else toast(r.data.error||'불러오지 못했어요');return;}
+  ROOMS=r.data.rooms;renderRooms();if(open_)await loadDetail(open_);if(msg)toast('새로 불러왔어요');
+}
+async function loadDetail(id){
+  const r=await api('GET','/rooms/'+id);
+  if(!r.ok){detail=null;open_=null;renderRooms();toast(r.data.error||'불러오지 못했어요');return;}
+  detail=r.data;renderRooms();
+}
+function btn(label,cls,fn){const b=document.createElement('button');b.type='button';b.className='btn'+(cls?' '+cls:'');b.textContent=label;b.onclick=fn;return b;}
+function armed(label,armLabel,fn,cls){
+  let on=false,t;const b=btn(label,cls||'danger',async()=>{
+    if(!on){on=true;b.textContent=armLabel;t=setTimeout(()=>{on=false;b.textContent=label;},3500);return;}
+    clearTimeout(t);on=false;b.textContent=label;await fn();
+  });return b;
+}
+function renderRooms(){
+  const q=$('q').value.trim().toLowerCase();
+  const list=ROOMS.filter(r=>!q||r.name.toLowerCase().includes(q)||r.id.includes(q));
+  $('count').textContent=`방 ${ROOMS.length}개 · 참여자 ${ROOMS.reduce((s,r)=>s+r.people,0)}명`;
+  const host=$('rooms');host.innerHTML='';
+  if(!list.length){const p=document.createElement('p');p.className='muted';p.textContent=ROOMS.length?'검색 결과가 없어요.':'아직 만들어진 방이 없어요.';host.append(p);return;}
+  list.forEach(r=>{
+    const card=document.createElement('section');card.className='panel opsroom';
+    const row=document.createElement('div');row.className='opsrow';
+    const l=document.createElement('div');
+    const nm=document.createElement('div');nm.className='nm';nm.textContent=r.name;
+    const mt=document.createElement('div');mt.className='meta2';
+    [`참여 ${r.people}명`,`확정 ${r.fixes}개`,r.show==='admin'?'방장만 결과 보기':'참여자 모두 결과 보기',`만든 날 ${fdate(r.created)}`,`최근 활동 ${fdate(r.last)}`,r.id].forEach((t,i)=>{const s=document.createElement('span');s.textContent=t;if(i===5)s.style.fontFamily='var(--f-mono)';mt.append(s);});
+    l.append(nm,mt);
+    const a=document.createElement('div');a.className='acts';
+    const isOpen=open_===r.id;
+    a.append(btn(isOpen?'접기':'관리',isOpen?'':'primary',async()=>{if(isOpen){open_=null;detail=null;renderRooms();}else{open_=r.id;detail=null;renderRooms();await loadDetail(r.id);}}));
+    const open=document.createElement('a');open.className='btn';open.textContent='방 열기';open.href='/r/'+r.id;open.target='_blank';open.rel='noopener';open.style.textDecoration='none';open.style.color='inherit';a.append(open);
+    row.append(l,a);card.append(row);
+    if(isOpen){card.append(renderDetail(r));}
+    host.append(card);
+  });
+}
+function renderDetail(r){
+  const box=document.createElement('div');box.className='opsdetail';
+  if(!detail||detail.room.id!==r.id){const p=document.createElement('p');p.className='muted';p.textContent='불러오는 중…';box.append(p);return box;}
+  // 이름 변경 / 공개범위 / 삭제
+  const ed=document.createElement('div');ed.className='opsedit';
+  const inp=document.createElement('input');inp.type='text';inp.value=detail.room.name;inp.maxLength=30;inp.setAttribute('aria-label','방 이름');
+  ed.append(inp,btn('이름 변경','',async()=>{
+    const v=inp.value.trim();if(!v){toast('방 이름을 적어 주세요');return;}
+    const x=await api('PATCH','/rooms/'+r.id,{name:v});
+    if(!x.ok){toast(x.data.error||'바꾸지 못했어요');return;}
+    toast('이름을 바꿨어요');await reload();
+  }));
+  const ctl=document.createElement('div');ctl.style.cssText='display:flex;gap:8px;flex-wrap:wrap;align-items:center';
+  ctl.append(ed,btn(detail.room.show==='admin'?'결과 공개: 방장만 → 모두로':'결과 공개: 모두 → 방장만으로','',async()=>{
+    const x=await api('PATCH','/rooms/'+r.id,{show:detail.room.show==='admin'?'all':'admin'});
+    if(!x.ok){toast(x.data.error||'바꾸지 못했어요');return;}
+    toast('공개 범위를 바꿨어요');await reload();
+  }),armed('방 삭제','정말 삭제할까요? 한 번 더',async()=>{
+    const x=await api('DELETE','/rooms/'+r.id);
+    if(!x.ok){toast(x.data.error||'삭제하지 못했어요');return;}
+    open_=null;detail=null;toast('방을 삭제했어요');await reload();
+  }));
+  box.append(ctl);
+  // 참여자
+  const pw=document.createElement('div');const h=document.createElement('h3');h.textContent=`참여자 ${detail.people.length}명`;pw.append(h);
+  const ul=document.createElement('ul');ul.className='opsppl';
+  if(!detail.people.length){const li=document.createElement('li');li.className='muted';li.textContent='아직 참여한 사람이 없어요.';ul.append(li);}
+  detail.people.forEach(p=>{
+    const li=document.createElement('li');const s=document.createElement('span');s.textContent=p.name;
+    const sm=document.createElement('small');sm.textContent=`${p.hours}시간 입력 · ${fdate(p.at)}${p.hasPin?'':' · 비밀번호 없음'}`;s.append(sm);
+    li.append(s,armed('강퇴','정말 강퇴? 한 번 더',async()=>{
+      const x=await api('DELETE','/rooms/'+r.id+'/people/'+p.id);
+      if(!x.ok){toast(x.data.error||'강퇴하지 못했어요');return;}
+      toast(`${p.name} 님을 강퇴했어요`);await reload();
+    }));
+    ul.append(li);
+  });
+  pw.append(ul);box.append(pw);
+  // 확정 일정
+  if(detail.fixes.length){
+    const fw=document.createElement('div');const fh=document.createElement('h3');fh.textContent=`확정 일정 ${detail.fixes.length}개`;fw.append(fh);
+    const fl=document.createElement('ul');fl.className='opsppl';
+    detail.fixes.forEach(f=>{
+      const li=document.createElement('li');const s=document.createElement('span');s.textContent=f.title;
+      const sm=document.createElement('small');sm.textContent=fixWhen(f);s.append(sm);
+      li.append(s,armed('삭제','한 번 더',async()=>{
+        const x=await api('DELETE','/rooms/'+r.id+'/fixes/'+f.id);
+        if(!x.ok){toast(x.data.error||'삭제하지 못했어요');return;}
+        toast('확정을 삭제했어요');await reload();
+      }));fl.append(li);
+    });
+    fw.append(fl);box.append(fw);
+  }
+  return box;
+}
+(async()=>{
+  const c=store.get();if(!c)return;
+  const r=await api('GET','/rooms',null,c);
+  if(r.ok){CRED=c;ROOMS=r.data.rooms;showMain();}else store.clear();
+})();
+</script>
+</body>
+</html>

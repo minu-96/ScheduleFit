@@ -5,7 +5,8 @@ const H=24, NIGHT=7;
 const PALETTE=['#e0775b','#3c8ad8','#8d6bd1','#2ea179','#cf9a12','#d45c9a','#45a2b6','#7f9434','#c4614a','#5b74c9'];
 const $=id=>document.getElementById(id);
 const pad=n=>String(n).padStart(2,'0');
-const ROOM=location.pathname.split('/').filter(Boolean)[1]||'';
+const ROOM=window.__ROOM||location.pathname.split('/').filter(Boolean)[1]||'';
+function nav(u){if(window.__nav)window.__nav(u);else location.href=u;}
 const LS='ts:'+ROOM;
 const rd=k=>{try{return JSON.parse(localStorage.getItem(k)||'null');}catch(e){return null;}};
 const wr=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}};
@@ -58,7 +59,7 @@ function fromStore(o){const out={};if(!o||typeof o!=='object')return out;
   Object.keys(o).forEach(k=>{if(/^\d{8}$/.test(k)&&typeof o[k]==='string')out[`${k.slice(0,4)}-${k.slice(4,6)}-${k.slice(6,8)}`]=decWeek(o[k]);});return out;}
 
 /* ---------- state ---------- */
-const S={room:null,me:null,mine:{},others:[],isAdmin:false,showNight:false,minLen:1,th:null,off:[],sync:'connecting'};
+const S={fixes:[],room:null,me:null,mine:{},others:[],isAdmin:false,showNight:false,minLen:1,th:null,off:[],sync:'connecting'};
 let mode='paint',focus=null,spot=null,flash=null,viewG=null;
 let sess=rd(LS);                 // {token,pid,name}
 let adminKey=localStorage.getItem('ts_admin:'+ROOM)||'';
@@ -86,7 +87,7 @@ async function load(){
     S.sync='offline';renderStatus();return;
   }
   const d=r.data;
-  S.room=d.room;S.isAdmin=!!d.isAdmin;
+  S.room=d.room;S.isAdmin=!!d.isAdmin;S.fixes=d.fixes||[];
   if(sess&&!d.me){sess=null;try{localStorage.removeItem(LS);}catch(e){}toast('다시 이름을 적고 들어와 주세요');}
   S.me=d.me?{id:d.me.id,name:d.me.name}:null;
   S.others=d.people.filter(p=>!d.me||p.id!==d.me.id).map(p=>({id:p.id,name:p.name,weeks:fromStore(p.weeks),at:p.at}));
@@ -185,6 +186,7 @@ function renderGrid(){
   const ppl=people(),act=ppl.filter(p=>p.on&&p.grid),others=act.filter(p=>!p.me);
   const g=S.mine[curKey()]||emptyGrid();viewG=S.mine[curKey()]?S.mine[curKey()]:null;
   const total=act.length,th=effTh(total),cnt=counts(act),today=new Date();
+  const fxm=fixCells();
   const forced=act.some(p=>DAYS.some(d=>p.grid[d].slice(0,NIGHT).some(Boolean)));
   const from=(S.showNight||forced)?0:NIGHT;
   const el=$('grid');el.className='grid '+mode;
@@ -217,6 +219,12 @@ function renderGrid(){
         if(focus&&focus.d===d&&focus.h===h)c.classList.add('sel');
         if(flash&&flash.has(d+h))c.classList.add('flash');
       }
+      const fc=fxm[d+h];
+      if(fc){
+        c.classList.add('fx');if(fc.first)c.classList.add('fxs');if(fc.last)c.classList.add('fxe');
+        c.title=`${fc.fix.title} · ${fixWhen(fc.fix)}`;c.textContent='';
+        if(fc.first){const t=document.createElement('span');t.className='fxt';t.textContent=fc.fix.title;c.append(t);}
+      }
       f.append(c);
     });
   }
@@ -232,13 +240,15 @@ function renderGrid(){
 }
 function renderLegend(total,othersN){
   const el=$('legend');
+  const hasFx=Object.keys(fixCells()).length>0;
+  const fxLg=hasFx?'<span><i class="fxsw"></i>확정된 일정</span>':'';
   if(mode==='paint'){
-    el.innerHTML=`<span><i class="sw" style="background:var(--me)"></i>내가 되는 시간</span>`+
+    el.innerHTML=`<span><i class="sw" style="background:var(--me)"></i>내가 되는 시간</span>`+fxLg+
       (othersN?`<span><span class="ramp"><i style="background:color-mix(in srgb,var(--accent) 14%,var(--surface-2))"></i><i style="background:color-mix(in srgb,var(--accent) 30%,var(--surface-2))"></i><i style="background:color-mix(in srgb,var(--accent) 48%,var(--surface-2))"></i></span>다른 사람이 많이 되는 시간</span>`:'');
-  }else if(!total){el.innerHTML='<span>이 주에 입력한 사람이 없어요</span>';}
+  }else if(!total){el.innerHTML='<span>이 주에 입력한 사람이 없어요</span>'+fxLg;}
   else{
     const steps=[...new Set([1,Math.ceil(total/2),total])];
-    el.innerHTML=`<span><span class="ramp">${steps.map(n=>`<i style="background:color-mix(in srgb,var(--accent) ${Math.round(16+84*n/total)}%,var(--surface-2))"></i>`).join('')}</span>1명 → ${total}명</span><span><i class="sw" style="box-shadow:inset 0 0 0 2px var(--ink)"></i>전원 가능</span><span><i class="sw" style="opacity:.4;background:color-mix(in srgb,var(--accent) 40%,var(--surface-2))"></i>최소 인원 미만</span>`;
+    el.innerHTML=`<span><span class="ramp">${steps.map(n=>`<i style="background:color-mix(in srgb,var(--accent) ${Math.round(16+84*n/total)}%,var(--surface-2))"></i>`).join('')}</span>1명 → ${total}명</span><span><i class="sw" style="box-shadow:inset 0 0 0 2px var(--ink)"></i>전원 가능</span><span><i class="sw" style="opacity:.4;background:color-mix(in srgb,var(--accent) 40%,var(--surface-2))"></i>최소 인원 미만</span>${fxLg}`;
   }
 }
 function renderDetail(){
@@ -263,6 +273,8 @@ function renderDetail(){
     const dt=document.createElement('i');dt.className='dot';dt.style.setProperty('--c',p.color);
     s.append(dt,document.createTextNode(p.name));nm.append(s);});
   el.append(w,c,nm);
+  const fc=fixCells()[focus.d+focus.h];
+  if(fc){const x=document.createElement('span');x.className='cnt';x.style.color='var(--fix)';x.textContent='확정: '+fc.fix.title;el.append(x);}
 }
 
 /* ---------- render: side ---------- */
@@ -340,11 +352,136 @@ function renderBest(){
     b.innerHTML=`<span class="bd${r.di===5?' sat':r.di===6?' sun':''}">${r.date.getMonth()+1}/${r.date.getDate()} ${KO[r.di]}</span>`+
       `<span class="bt">${pad(r.start)}:00–${pad(r.end)}:00<small>${r.len}시간</small></span>`+
       `<span class="bc">${r.minc===total&&total>1?'<span class="pill">전원</span>':''}${r.minc}/${total}</span>`;
-    b.onclick=()=>showSlot(r);li.append(b);ol.append(li);
+    b.onclick=()=>showSlot(r);li.append(b);
+    if(S.isAdmin&&!r.past){const fb=document.createElement('button');fb.type='button';fb.className='fixgo';fb.textContent='확정';fb.title='이 시간으로 일정 확정하기';fb.onclick=()=>prefillFix(r);li.append(fb);}
+    ol.append(li);
   });
   if(list.length>8){const li=document.createElement('li');li.className='more';li.textContent=`외 ${list.length-8}개 시간대`;ol.append(li);}
 }
-function renderAll(){renderStatus();renderWeek();renderGrid();renderMe();renderMembers();renderBest();renderCal();}
+function renderAll(){renderFix();renderStatus();renderWeek();renderGrid();renderMe();renderMembers();renderBest();renderCal();}
+
+
+/* ---------- 확정 일정 ---------- */
+const dk8=s=>`${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}`;
+const fixDate=f=>fromKey(dk8(f.date));
+function fixWhen(f){const d=fixDate(f);return `${d.getMonth()+1}/${d.getDate()}(${KO[(d.getDay()+6)%7]}) ${pad(f.start)}:00–${pad(f.end)}:00`;}
+function fixCells(){
+  const m={};
+  (S.fixes||[]).forEach(f=>{
+    const d=fixDate(f);if(keyOf(mondayOf(d))!==curKey())return;
+    const day=DAYS[(d.getDay()+6)%7];
+    for(let h=f.start;h<f.end;h++)m[day+h]={fix:f,first:h===f.start,last:h===f.end-1};
+  });
+  return m;
+}
+function fixAvail(f){
+  const d=fixDate(f),wk=keyOf(mondayOf(d)),day=DAYS[(d.getDay()+6)%7];
+  const ppl=[];if(S.me)ppl.push({name:S.me.name,w:S.mine[wk]});
+  S.others.forEach(p=>ppl.push({name:p.name,w:p.weeks[wk]}));
+  const yes=[],no=[],none=[];
+  ppl.forEach(p=>{
+    if(!hasAny(p.w)){none.push(p.name);return;}
+    let ok=true;for(let h=f.start;h<f.end;h++)if(!p.w[day][h]){ok=false;break;}
+    (ok?yes:no).push(p.name);
+  });
+  return{yes,no,none,total:ppl.length};
+}
+let editFix=null;
+function fixItem(f,past){
+  const li=document.createElement('li');li.className='fixitem'+(past?' past':'');
+  const t=document.createElement('span');t.className='ft';t.textContent=f.title;
+  const fb=document.createElement('span');fb.className='fb';
+  if(S.isAdmin){
+    const eb=document.createElement('button');eb.type='button';eb.textContent='수정';eb.onclick=()=>startEditFix(f);
+    const rb=document.createElement('button');rb.type='button';rb.className='rm';rb.textContent='삭제';rb.setAttribute('aria-label',`${f.title} 확정 취소`);
+    let armed=false;
+    rb.onclick=async()=>{
+      if(!armed){armed=true;rb.textContent='한 번 더';setTimeout(()=>{armed=false;rb.textContent='삭제';},3000);return;}
+      const r=await api('DELETE','/fixes/'+f.id);
+      if(!r.ok){toast(r.data.error||'삭제하지 못했어요');return;}
+      toast('확정을 취소했어요');load();
+    };
+    fb.append(eb,rb);
+  }
+  const w=document.createElement('span');w.className='fw';w.textContent=fixWhen(f);
+  li.append(t,fb,w);
+  if(f.note){const n=document.createElement('span');n.className='fn';n.textContent=f.note;li.append(n);}
+  if(!past){
+    const a=fixAvail(f),el=document.createElement('span');el.className='fa';
+    const restricted=S.room&&S.room.show==='admin'&&!S.isAdmin;
+    if(restricted){
+      if(S.me){const st=a.yes.length?'가능':a.no.length?'불가':'미입력';el.innerHTML='내 시간: <b></b>';el.querySelector('b').textContent=st;if(st==='가능')el.classList.add('ok');li.append(el);}
+    }else if(a.total){
+      if(a.yes.length===a.total){el.classList.add('ok');el.innerHTML='<b>전원 가능</b>';}
+      else{
+        const b=document.createElement('b');b.textContent=`${a.yes.length}/${a.total}명 가능`;el.append(b);
+        if(a.no.length)el.append(document.createTextNode(` · 불가 ${a.no.join(', ')}`));
+        if(a.none.length)el.append(document.createTextNode(` · 이 주 미입력 ${a.none.join(', ')}`));
+      }
+      li.append(el);
+    }
+  }
+  return li;
+}
+function renderFix(){
+  const todayStr=keyOf(new Date()).replace(/-/g,'');
+  const all=(S.fixes||[]).slice().sort((a,b)=>a.date.localeCompare(b.date)||a.start-b.start);
+  const up=all.filter(f=>f.date>=todayStr),past=all.filter(f=>f.date<todayStr).reverse();
+  const ul=$('fix-list');ul.innerHTML='';
+  if(!up.length){const li=document.createElement('li');li.className='member empty';li.textContent=S.isAdmin?'아직 확정한 일정이 없어요. 추천 시간 옆의 “확정”을 눌러 정해 보세요.':'아직 확정된 일정이 없어요. 방장이 정하면 여기에 나와요.';ul.append(li);}
+  else up.forEach(f=>ul.append(fixItem(f,false)));
+  const pd=$('fix-past');pd.hidden=!past.length;
+  if(past.length){$('fix-past-sum').textContent=`지난 확정 일정 ${past.length}개`;const pl=$('fix-past-list');pl.innerHTML='';past.forEach(f=>pl.append(fixItem(f,true)));}
+  $('copy-fix').hidden=!up.length;
+  $('fix-form').hidden=!S.isAdmin;
+}
+function initFixForm(){
+  const a=$('fx-start'),b=$('fx-end');
+  for(let h=0;h<24;h++){a.add(new Option(pad(h)+':00',h));}
+  for(let h=1;h<=24;h++){b.add(new Option(pad(h)+':00',h));}
+  a.value=19;b.value=21;$('fx-date').value=keyOf(new Date());
+  a.onchange=()=>{if(+b.value<=+a.value)b.value=Math.min(24,+a.value+1);};
+}
+function setFixForm(f){
+  $('fx-title').value=f.title||'';$('fx-date').value=f.date;$('fx-start').value=f.start;$('fx-end').value=f.end;$('fx-note').value=f.note||'';
+}
+function prefillFix(r){
+  editFix=null;$('fx-save').textContent='확정하기';$('fx-cancel').hidden=true;
+  setFixForm({title:$('fx-title').value,date:keyOf(r.date),start:r.start,end:Math.min(r.end,r.start+2),note:$('fx-note').value});
+  const f=$('fix-form');f.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center'});
+  setTimeout(()=>$('fx-title').focus(),250);
+}
+function startEditFix(f){
+  editFix=f.id;setFixForm({title:f.title,date:dk8(f.date),start:f.start,end:f.end,note:f.note});
+  $('fx-save').textContent='수정 저장';$('fx-cancel').hidden=false;$('fix-form').scrollIntoView({block:'center'});
+}
+$('fx-cancel').onclick=()=>{editFix=null;$('fx-save').textContent='확정하기';$('fx-cancel').hidden=true;$('fx-title').value='';$('fx-note').value='';};
+async function saveFix(){
+  const date=$('fx-date').value.replace(/-/g,''),start=+$('fx-start').value,end=+$('fx-end').value;
+  if(!date){toast('날짜를 골라 주세요');return;}
+  if(end<=start){toast('끝나는 시각이 시작보다 늦어야 해요');return;}
+  const body={title:$('fx-title').value.trim()||'확정 일정',date,start,end,note:$('fx-note').value.trim()};
+  $('fx-save').disabled=true;
+  const r=editFix?await api('PATCH','/fixes/'+editFix,body):await api('POST','/fixes',body);
+  $('fx-save').disabled=false;
+  if(!r.ok){toast(r.data.error||'확정하지 못했어요');return;}
+  const d=fromKey(dk8(date));
+  toast(editFix?'수정했어요':`${d.getMonth()+1}/${d.getDate()} ${pad(start)}:00–${pad(end)}:00 일정을 확정했어요`);
+  const wasEdit=editFix;editFix=null;$('fx-save').textContent='확정하기';$('fx-cancel').hidden=true;$('fx-title').value='';$('fx-note').value='';
+  if(!wasEdit){cur=mondayOf(d);}
+  await load();
+}
+$('fx-save').onclick=saveFix;
+$('fix-form').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.tagName==='INPUT'){e.preventDefault();saveFix();}});
+$('fix-form').addEventListener('submit',e=>e.preventDefault());
+$('copy-fix').onclick=async()=>{
+  const todayStr=keyOf(new Date()).replace(/-/g,'');
+  const up=(S.fixes||[]).filter(f=>f.date>=todayStr).sort((a,b)=>a.date.localeCompare(b.date)||a.start-b.start);
+  if(!up.length){toast('복사할 확정 일정이 없어요');return;}
+  const lines=[`[${S.room.name}] 확정된 일정`,...up.map(f=>`• ${f.title} · ${fixWhen(f).replace(/:00/g,'')}${f.note?' · '+f.note:''}`)];
+  toast(await copyText(lines.join('\n'))?'확정 일정을 복사했어요':'복사가 막혀 있어요');
+};
+initFixForm();
 
 /* ---------- actions ---------- */
 function goWeek(mon){cur=mon;focus=null;flash=null;renderAll();}
@@ -439,6 +576,7 @@ $('copy-admin').onclick=async()=>toast(await copyText(location.origin+'/r/'+ROOM
 $('join-btn').onclick=async()=>{
   const name=$('join-name').value.trim(),pin=$('join-pin').value.trim();
   if(!name){$('join-name').focus();toast('이름을 적어 주세요');return;}
+  if(pin.length<4){$('join-pin').focus();toast('비밀번호를 4자 이상 적어 주세요');return;}
   $('join-btn').disabled=true;
   const r=await api('POST','/join',{name,pin});
   $('join-btn').disabled=false;
@@ -472,7 +610,7 @@ let delArmed=false;
 $('del-room').onclick=async()=>{
   if(!delArmed){delArmed=true;$('del-room').textContent='정말 삭제할까요? 한 번 더 누르세요';setTimeout(()=>{delArmed=false;$('del-room').textContent='방 삭제';},4000);return;}
   const r=await api('DELETE','');if(!r.ok){toast(r.data.error||'삭제하지 못했어요');return;}
-  wr('ts_rooms',(rd('ts_rooms')||[]).filter(x=>x.id!==ROOM));location.href='/';
+  wr('ts_rooms',(rd('ts_rooms')||[]).filter(x=>x.id!==ROOM));nav('/');
 };
 
 $('th-minus').onclick=()=>{const t=slots().total;S.th=Math.max(1,effTh(t)-1);renderGrid();renderBest();};

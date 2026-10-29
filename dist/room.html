@@ -72,9 +72,9 @@
           <input type="text" id="join-name" maxlength="20" placeholder="팀원이 알아볼 수 있는 이름" autocomplete="off">
         </div>
         <div class="field">
-          <label class="lbl" for="join-pin">비밀번호 (선택)</label>
-          <input type="text" id="join-pin" maxlength="12" placeholder="4자 이상" autocomplete="off">
-          <p class="help">적어 두면 다른 기기에서 같은 이름으로 다시 들어올 수 있고, 남이 내 이름으로 들어오지 못해요.</p>
+          <label class="lbl" for="join-pin">비밀번호 (4자 이상)</label>
+          <input type="password" id="join-pin" maxlength="12" placeholder="나중에 다른 기기에서 쓸 비밀번호" autocomplete="off">
+          <p class="help">처음이면 정한 비밀번호가 내 이름의 비밀번호가 돼요. 기기가 바뀌면 같은 이름과 비밀번호로 다시 들어오고, 비밀번호를 모르면 남이 내 이름으로 들어올 수 없어요.</p>
         </div>
         <button class="btn primary" id="join-btn" type="button">들어가기</button>
       </section>
@@ -113,6 +113,25 @@
           <button class="btn danger" id="del-room" type="button">방 삭제</button>
         </div>
         <p class="help">방장 링크로 들어오면 다른 기기에서도 방장이 돼요. 이 링크는 다른 사람에게 보내지 마세요.</p>
+      </section>
+
+      <section class="panel card" id="card-fix" aria-labelledby="h-fix">
+        <div class="cardhead"><h2 id="h-fix"><span class="step">확정</span>확정된 일정</h2><button class="txtbtn" id="copy-fix" type="button" hidden>공지용 복사</button></div>
+        <ul class="fixlist" id="fix-list"></ul>
+        <details class="sub" id="fix-past" hidden><summary id="fix-past-sum"></summary><ul class="fixlist" id="fix-past-list"></ul></details>
+        <form class="fixform" id="fix-form" autocomplete="off" hidden>
+          <span class="lbl">일정 확정하기</span>
+          <div class="field"><input type="text" id="fx-title" maxlength="30" placeholder="이름 (예: 정기회의, 작업팟)"></div>
+          <div class="fxrow">
+            <input type="date" id="fx-date" aria-label="날짜">
+            <select id="fx-start" aria-label="시작 시각"></select>
+            <span aria-hidden="true">–</span>
+            <select id="fx-end" aria-label="끝 시각"></select>
+          </div>
+          <div class="field"><input type="text" id="fx-note" maxlength="100" placeholder="장소나 링크 (선택)"></div>
+          <div class="hrow"><button class="btn primary" id="fx-save" type="button">확정하기</button><button class="btn" id="fx-cancel" type="button" hidden>수정 취소</button></div>
+          <p class="help">추천 시간 옆의 “확정”을 누르면 날짜와 시간이 채워져요. 확정된 시간은 시간표에 색 블록으로 표시되고 모두가 볼 수 있어요.</p>
+        </form>
       </section>
 
       <section class="panel card" aria-labelledby="h-team">
