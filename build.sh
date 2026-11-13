@@ -3,7 +3,7 @@
 set -e
 cd "$(dirname "$0")"
 mkdir -p dist
-cp public/index.html public/room.html public/ops.html public/room.js public/style.css dist/
+cp public/index.html public/room.html public/ops.html public/room.js public/style.css public/sitemap.xml public/robots.txt dist/
 {
   sed 's/^export async function onRequest(/async function handle(/' "functions/api/[[path]].js"
   cat <<'JS'

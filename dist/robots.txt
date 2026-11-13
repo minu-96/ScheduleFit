@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+
+Sitemap: https://team-schedule-5in.pages.dev/sitemap.xml
