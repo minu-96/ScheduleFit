@@ -325,8 +325,8 @@ export default {
       return handle({ request, env, params: { path } });
     }
     // 구글 서치 콘솔 소유권 확인 파일 (Pages가 .html 주소를 다른 주소로 돌려보내지 않게 직접 응답)
-    if (url.pathname === '/google471348976b5f6f1f.html') {
-      return new Response('google-site-verification: google471348976b5f6f1f.html', { headers: { 'content-type': 'text/html; charset=utf-8' } });
+    if (url.pathname === '/googlee98733dd5a167955.html') {
+      return new Response('google-site-verification: googlee98733dd5a167955.html', { headers: { 'content-type': 'text/html; charset=utf-8' } });
     }
     if (/^\/r\/[^/]+\/?$/.test(url.pathname)) {
       return env.ASSETS.fetch(new Request(new URL('/room', url), request));
