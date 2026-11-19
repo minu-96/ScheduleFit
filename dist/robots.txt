@@ -6,4 +6,4 @@ User-agent: Yeti
 Allow: /
 Disallow: /api/
 
-Sitemap: https://team-schedule-5in.pages.dev/sitemap.xml
+Sitemap: https://schedule-fit.pages.dev/sitemap.xml

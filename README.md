@@ -18,21 +18,21 @@ Cloudflare Pages + D1(무료 플랜)에서 돌아가요.
 
    ```
    npx wrangler d1 execute team-schedule --remote --file=schema.sql
-   npx wrangler pages deploy public --project-name team-schedule
+   npx wrangler pages deploy public --project-name schedule-fit
    ```
    (처음 배포할 때 production 브랜치 이름을 물어보면 `main`을 입력하세요.)
 
-4. 끝에 나오는 `https://team-schedule-xxxx.pages.dev` 가 사이트 주소예요.
+4. 끝에 나오는 `https://schedule-fit.pages.dev` 가 사이트 주소예요.
    - 첫 화면에서 방을 만들면 `/r/방코드` 링크가 생겨요. 그 링크를 팀원에게 보내면 돼요.
 
 ## 수정 후 다시 배포
 ```
-npx wrangler pages deploy public --project-name team-schedule
+npx wrangler pages deploy public --project-name schedule-fit
 ```
 (데이터는 그대로 남아요.)
 
 ## 내 도메인 연결 (선택)
-Cloudflare 대시보드 > Workers & Pages > team-schedule > Custom domains
+Cloudflare 대시보드 > Workers & Pages > schedule-fit > Custom domains
 
 ## 사용 방법
 - 방장: 방을 만든 브라우저가 방장이에요. 방 화면의 **방장 링크 복사**로 다른 기기에서도 방장이 될 수 있어요(이 링크는 보관만 하세요).
